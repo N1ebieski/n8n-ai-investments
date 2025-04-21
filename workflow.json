@@ -1,0 +1,852 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Na podstawie analizy technicznej poniższych danych:\n\n {{ $json.dataAsString }}\n\npodaj mi poziom wejścia w inwestycję oraz wyjścia z inwestycji.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Jesteś najlepszym analitykiem giełdowym. Użytkownik poda Ci historyczne dane giełdowe w formacie json, a Ty po ich analizie technicznej masz podać rekomendację poziomów wejścia w inwestycję oraz wyjścia z inwestycji."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        1280,
+        -585
+      ],
+      "id": "cf42102a-2c18-498e-9151-56f4033a7261",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1308,
+        -365
+      ],
+      "id": "bc74b36c-7884-4b05-9c7b-af678616390a",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "U32A1fTCKdf9MkPG",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n\t\"type\": \"object\",\n\t\"properties\": {\n\t\t\"buy\": {\n\t\t\t\"type\": \"number\",\n            \"description\": \"Poziom wejścia w inwestycję (kupno)\"\n\t\t},\n\t\t\"sell\": {\n\t\t\t\"type\": \"number\",\n\t\t\t\"description\": \"Poziom wyjścia z inwestycji (sprzedaż)\"\n\t\t}\n\t},\n    \"required\": [\"buy\", \"sell\"],\n    \"additionalProperties\": false\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1428,
+        -365
+      ],
+      "id": "d51853b7-740b-45be-af21-571cbf9c6c10",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "$input.first().json = {\n  date: {\n    from: (() => {\n      const d = new Date();\n      d.setMonth(d.getMonth() - $input.first().json.period);\n      \n      return d.toISOString().slice(0,10).replace(/-/g, '');\n    })(),\n    to: new Date().toISOString().slice(0,10).replace(/-/g, '')\n  },\n  interval: (() => {\n    if ($input.first().json.period > 12) {\n      return 'w';\n    }\n    \n    return 'd';\n  })()\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        -585
+      ],
+      "id": "220b2acf-e127-4dff-ad16-d511d7a6ebd4",
+      "name": "Calculate dates/interval"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').item.json.url }}/q/d/l/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "s",
+              "value": "={{ $('Config').item.json.instrument }}"
+            },
+            {
+              "name": "f",
+              "value": "={{ $json.date.from }}"
+            },
+            {
+              "name": "t",
+              "value": "={{ $json.date.to }}"
+            },
+            {
+              "name": "i",
+              "value": "={{ $json.interval }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        620,
+        -585
+      ],
+      "id": "e71e79b7-1f42-4dbc-840b-eb4e043d8b60",
+      "name": "Download a csv file with data"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        840,
+        -585
+      ],
+      "id": "6b5d069b-2db8-440d-90bf-9b7996eb79be",
+      "name": "Extract data from a csv file",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      dataAsString: JSON.stringify($input.all().flat())\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        -585
+      ],
+      "id": "7ec63e94-e17b-46da-aeb7-004d9f3c5f4a",
+      "name": "Set data as string"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        -860
+      ],
+      "id": "7aa3cc71-b09e-4a5d-8ade-2a4f11551eec",
+      "name": "Run",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Get a file id').item.json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.instrument }}",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2976,
+        -835
+      ],
+      "id": "7bad38a6-8892-4605-abbb-40702502642a",
+      "name": "Append a input to the sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "xY3MaBeMjQz00KJt",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "fileFolder",
+        "queryString": "={{ $json.document_name }}",
+        "limit": 1,
+        "filter": {
+          "whatToSearch": "files"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        180,
+        -985
+      ],
+      "id": "0fdfc47e-bef2-4e62-95f1-837a7ba6c06f",
+      "name": "Check if a file exists",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "xY3MaBeMjQz00KJt",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f8321fd4-d817-4806-9ae8-383918d8c52d",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        -985
+      ],
+      "id": "4611fd2f-5491-4efd-93ad-65a08426568c",
+      "name": "If a file exists"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b1d32594-99a2-437b-858b-980522db40de",
+              "leftValue": "={{ $('Config').item.json.flush }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        620,
+        -910
+      ],
+      "id": "143e558b-9c60-4971-8724-8235225749b4",
+      "name": "If flush is true",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "spreadsheet",
+        "operation": "deleteSpreadsheet",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Check if a file exists').item.json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        840,
+        -985
+      ],
+      "id": "b4e10410-625d-4755-9235-90636aa4cfe1",
+      "name": "Delete a document",
+      "credentials": {
+        "googleApi": {
+          "id": "xY3MaBeMjQz00KJt",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "spreadsheet",
+        "title": "={{ $('Config').item.json.document_name }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1060,
+        -1060
+      ],
+      "id": "a620759b-91ca-4791-9a82-da3d2ef0e318",
+      "name": "Create a document",
+      "credentials": {
+        "googleApi": {
+          "id": "xY3MaBeMjQz00KJt",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "useDataOfInput": 2
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        1656,
+        -835
+      ],
+      "id": "f1dc6a25-e85d-49da-885e-d32970144bec",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "fileFolder",
+        "queryString": "={{ $('Config').first().json.document_name }}",
+        "limit": 1,
+        "filter": {
+          "whatToSearch": "files"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1876,
+        -835
+      ],
+      "id": "17045644-fe12-475a-a791-8372c1d5face",
+      "name": "Get a file id",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "xY3MaBeMjQz00KJt",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.instrument }}",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2096,
+        -835
+      ],
+      "id": "dcecd228-84ab-41d2-9bee-f563e82b2242",
+      "name": "Check if a sheet exists",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleApi": {
+          "id": "xY3MaBeMjQz00KJt",
+          "name": "Google Service Account account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1530742b-2e1d-4524-8f96-d317a747d035",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "/Sheet with name .*? not found/",
+              "operator": {
+                "type": "string",
+                "operation": "notRegex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2316,
+        -835
+      ],
+      "id": "f6e56d17-21cd-4e56-a710-4ebc16ea0e68",
+      "name": "If a sheet exists"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "create",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Get a file id').item.json.id }}",
+          "mode": "id"
+        },
+        "title": "={{ $('Config').first().json.instrument }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2536,
+        -760
+      ],
+      "id": "f95d67b9-48bc-4f35-916a-12e249bb9ed1",
+      "name": "Create a sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "xY3MaBeMjQz00KJt",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "share",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "permissionsUi": {
+          "permissionsValues": {
+            "role": "reader",
+            "type": "user",
+            "emailAddress": "={{ $('Config').item.json.owner_email }}"
+          }
+        },
+        "options": {
+          "transferOwnership": false
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1358,
+        -1060
+      ],
+      "id": "559182ef-9c11-403c-8556-8db19b54579f",
+      "name": "Add a permission for the owner",
+      "credentials": {
+        "googleApi": {
+          "id": "xY3MaBeMjQz00KJt",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date();\nconst day = String(today.getDate()).padStart(2, '0');\nconst month = String(today.getMonth() + 1).padStart(2, '0');\nconst year = today.getFullYear();\n\nreturn {\n  json: {\n    date: `${day}-${month}-${year}`,\n    buy: $('Merge').first().json.output.buy,\n    sell: $('Merge').first().json.output.sell\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2756,
+        -835
+      ],
+      "id": "09edca50-c401-41a2-abf4-b940ab96b589",
+      "name": "Prepare data for the document"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9cfac9f6-c449-4ff6-912b-13033f789161",
+              "name": "instrument",
+              "value": "wig20",
+              "type": "string"
+            },
+            {
+              "id": "8024d879-9658-4f1b-b138-badd82804eb3",
+              "name": "url",
+              "value": "https://stooq.pl",
+              "type": "string"
+            },
+            {
+              "id": "5e7a830d-1f81-4746-91ea-47270575f07e",
+              "name": "period",
+              "value": 12,
+              "type": "number"
+            },
+            {
+              "id": "aeb6337f-3e37-4c45-823a-85e1c82c5ae9",
+              "name": "document_name",
+              "value": "N8N investments",
+              "type": "string"
+            },
+            {
+              "id": "803a0895-889b-4610-843c-893b61e19716",
+              "name": "owner_email",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "17f5493f-633d-40f9-9c59-a6680709ee05",
+              "name": "flush",
+              "value": false,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -40,
+        -860
+      ],
+      "id": "2ca13d5f-25f5-4dd2-812c-994fdde39609",
+      "name": "Config",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "content": "Parameters:\n\n- `instrument` - ID of the financial instrument available on the https://stooq.pl (default: wig20)\n- `url` - (default: https://stooq.pl)\n- `period` - quotation period in months to be analyzed by AI (default: 12)\n- `document_name` - name of the sheets document that will aggregate the data (default: N8N Investments)\n- `owner_email` - email of the google profile account where document will be available\n- `flush` - deletes the old sheets document file and creates a new one (default: false)\n",
+        "height": 420,
+        "width": 560
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        -1120
+      ],
+      "id": "b6b00d3b-b85a-44fe-a07c-f92204f62a20",
+      "name": "Sticky Note"
+    }
+  ],
+  "connections": {
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate dates/interval": {
+      "main": [
+        [
+          {
+            "node": "Download a csv file with data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download a csv file with data": {
+      "main": [
+        [
+          {
+            "node": "Extract data from a csv file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract data from a csv file": {
+      "main": [
+        [
+          {
+            "node": "Set data as string",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set data as string": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if a file exists": {
+      "main": [
+        [
+          {
+            "node": "If a file exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If a file exists": {
+      "main": [
+        [
+          {
+            "node": "If flush is true",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If flush is true": {
+      "main": [
+        [
+          {
+            "node": "Delete a document",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete a document": {
+      "main": [
+        [
+          {
+            "node": "Create a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a document": {
+      "main": [
+        [
+          {
+            "node": "Add a permission for the owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Get a file id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file id": {
+      "main": [
+        [
+          {
+            "node": "Check if a sheet exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if a sheet exists": {
+      "main": [
+        [
+          {
+            "node": "If a sheet exists",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If a sheet exists": {
+      "main": [
+        [
+          {
+            "node": "Prepare data for the document",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a sheet": {
+      "main": [
+        [
+          {
+            "node": "Prepare data for the document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add a permission for the owner": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare data for the document": {
+      "main": [
+        [
+          {
+            "node": "Append a input to the sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Check if a file exists",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Calculate dates/interval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c293b657fe8a441b09ef93e537d456605b86d68811eabf8189b91be081f649e4"
+  }
+}
